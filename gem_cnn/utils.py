@@ -1,6 +1,13 @@
+from typing import Dict
+
 import numpy as np
 import torch
+from torch import nn as nn
+from torch_scatter import scatter_add
+from trimesh import load_mesh
 from trimesh.base import Trimesh
+
+from gem_cnn.torch_geometric_path.data import Data
 
 
 def normalize(matrix, axis=-1):
@@ -47,6 +54,45 @@ def make_projector(normals):
     return torch.eye(3) - torch.einsum('pi, pj-> pij', normals, normals)
 
 
+def weighted_normals(face_normals, face_areas, faces, vertex_num):
+    vertex_normals = sum(
+        scatter_add(face_normals * face_areas.unsqueeze(dim=-1), faces[:, i], dim=0, dim_size=vertex_num)
+        for i in range(3)
+    )
+    # vertex_normals /= sum(scatter_add(face_areas, faces[:, i]) for i in range(3)).unsqueeze(-1)
+    vertex_normals /= vertex_normals.norm(dim=-1, keepdim=True)
+    return vertex_normals
 
 
+def read_mesh(path):
+    mesh = load_mesh(path)
+    pos = torch.FloatTensor(mesh.vertices)
+    edges = mesh.edges
+    edges = edges[np.lexsort((edges[:, 1], edges[:, 0]))]
+    edges = torch.LongTensor(edges.T)
+    face_normals = torch.FloatTensor(mesh.face_normals)
+    face_areas = torch.FloatTensor(mesh.area_faces)
+    faces = torch.LongTensor(mesh.faces)
+    vertex_normals = torch.FloatTensor(mesh.vertex_normals)
 
+    data = Data(
+        pos=pos,
+        edge_index=edges,
+        vertex_normals=vertex_normals,
+        face_normals=face_normals,
+        face_areas=face_areas,
+        faces=faces,
+    )
+    return data
+
+
+def nan_filter(data):
+    return not any(torch.isnan(data[key]).any().item() for key in data.keys)
+
+
+class ModuleType:
+    def __init__(self, module_dict: Dict[str, nn.Module]) -> nn.Module:
+        self._dict = module_dict
+
+    def __call__(self, key):
+        return self._dict[key]

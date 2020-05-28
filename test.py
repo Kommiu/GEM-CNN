@@ -7,7 +7,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.logging.neptune import NeptuneLogger
 
 from gem_cnn.models import MeshNetwork
-from gem_cnn.data import GetLocalPatch
+from gem_cnn.transforms import GetLocalPatch
 
 from time import sleep
 
