@@ -6,7 +6,7 @@ from torch import nn as nn
 from torch_geometric.transforms import Compose
 
 import gem_cnn.utils
-from gem_cnn.datasets import STLDataset
+from gem_cnn.datasets import FAUST
 from gem_cnn.models.heads import MLPHead, ConvHead
 from gem_cnn.models.stems import GEMNet
 from gem_cnn.utils import ModuleType
@@ -19,11 +19,9 @@ class MeshNetwork(LightningModule):
     def __init__(self, hparams):
         super().__init__()
         self.hparams = hparams
-        self.output_dim = len(hparams.target_cols)
-        self.input_dim = 3 + len(hparams.feature_cols)
+        self.input_dim = 3
 
-
-        self.loss = hparams.loss
+        self.loss = nn.NLLLoss()
 
         self.gem_network = GEMNet(
             self.input_dim,
@@ -31,56 +29,67 @@ class MeshNetwork(LightningModule):
             hparams.gem_num_rhos,
             hparams.gem_max_rhos,
             hparams.gem_nonlinearity,
-            hparams.is_da,
-            hparams.mlp_dim,
         )
 
-        self.transform = Compose([
-            GetLocalPatch(self.hparams.patch_radius, len(self.gem_network.gem_convs)),
-            Scale(self.hparams.x_scale, self.hparams.y_scale)
-        ]) if self.hparams.with_sampler else Scale(self.hparams.x_scale, self.hparams.y_scale)
-        # ScaledZNormalize(hparams.x_scale, hparams.y_scale)
-        head_channels = [hparams.gem_output_dim] + hparams.head_channels + [self.output_dim]
+        head_channels = [hparams.gem_output_dim] + hparams.head_channels + [self.hparams.output_dim]
         self.head = ConvHead(
             head_channels,
             hparams.head_nonlinearity,
         )
 
     def forward(self, data):
-        x = self.gem_network(data)[data.target_nodes]
-        x = self.head(x)
-        return x
+        # for key in data.keys:
+        #     if torch.isnan(data[key]).any():
+        #         print(key)
+        #         raise Exception
+        x = self.gem_network(data)
+        x = self.head(x.unsqueeze(dim=-1)).squeeze()
+        return F.log_softmax(x, dim=1)
 
     def training_step(self, data, batch_nb):
-        y_hat = self(data).squeeze()
-        loss = self.loss(y_hat, data.y.squeeze()[data.target_nodes])
+        y_hat = self(data)
+        loss = self.loss(y_hat, data.y)
         logs = {'train_loss': loss}
         return {'loss': loss, 'log': logs}
 
     def validation_step(self, data, data_nb):
-        y_hat = self(data).squeeze()
-        mse = self.loss(y_hat, data.y.squeeze()[data.target_nodes])
-        return {'val_loss': mse,}
+
+        y_hat = self(data)
+        loss = self.loss(y_hat, data.y)
+        count = len(y_hat)
+        correct = (y_hat.argmax(dim=1) == data.y).sum().cpu().item()
+        return {'val_loss': loss, 'count': count, 'correct': correct}
 
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
-        logs = {'val_loss': avg_loss, }
+        acc = sum(x['correct'] for x in outputs)
+        cnt = sum(x['count'] for x in outputs)
+        acc /= float(cnt)
+        logs = {'val_loss': avg_loss, 'val_accuracy': acc}
         return {'val_loss': avg_loss, 'log': logs}
 
     def test_step(self, data, data_nb):
-        y_hat = self(data).squeeze()
-        return {'test_loss': self.loss(y_hat, data.y.squeeze()[data.target_nodes])}
+        y_hat = self(data)
+        loss = self.loss(y_hat, data.y)
+        count = len(y_hat)
+        correct = (y_hat.argmax(dim=1) == data.y).sum().cpu().item()
+        return {'test_loss': loss, 'count': count, 'correct': correct}
 
     def test_epoch_end(self, outputs):
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
-        logs = {'val_loss': avg_loss}
-        return {'val_loss': avg_loss, 'log': logs}
+        acc = sum(x['correct'] for x in outputs)
+        cnt = sum(x['count'] for x in outputs)
+        acc /= float(cnt)
+        logs = {'test_loss': avg_loss, 'test_accuracy': acc}
+        return {'test_loss': avg_loss, 'log': logs}
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(
-            self.parameters(),
+        optimizer = torch.optim.AdamW([
+            {'params': self.gem_network.parameters()},
+            {'params': self.head.parameters(), 'weight_decay': 1e-4}
+        ],
             lr=self.hparams.learning_rate,
-            weight_decay=self.hparams.weight_decay
+            weight_decay=self.hparams.weight_decay,
         )
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
@@ -90,7 +99,7 @@ class MeshNetwork(LightningModule):
 
         )
         return [optimizer], [scheduler]
-    #
+
     # def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i, second_order_closure=None):
     #     # warm up lr
     #     if self.trainer.global_step < self.hparams.lr_warmup_num:
@@ -103,38 +112,25 @@ class MeshNetwork(LightningModule):
     #     optimizer.zero_grad()
 
     def train_dataloader(self):
-        ds = STLDataset(
-            self.hparams.train_data_root,
-            transform=self.transform,
-            pre_transform=GEMTransform(gem_cnn.utils.weighted_normals, self.hparams.is_da),
-            feature_cols=self.hparams.feature_cols,
-            target_cols=self.hparams.target_cols,
+        ds = FAUST(
+            self.hparams.data_root,
+            train=True,
+            pre_transform=GEMTransform(self.hparams.weighted_normals),
         )
-        return DataLoader(
-            ds,
-            batch_size=self.hparams.batch_size,
-            num_workers=self.hparams.num_workers,
-            shuffle=self.hparams.shuffle,
-        )
+        return DataLoader(ds, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers)
 
     def val_dataloader(self):
 
-        ds = STLDataset(
-            self.hparams.val_data_root,
-            transform=self.transform,
-            pre_transform=GEMTransform(gem_cnn.utils.weighted_normals, self.hparams.is_da),
-            feature_cols=self.hparams.feature_cols,
-            target_cols=self.hparams.target_cols,
+        ds = FAUST(
+            self.hparams.data_root,
+            train=False,
+            pre_transform=GEMTransform(self.hparams.weighted_normals),
         )
-        return DataLoader(
-            ds,
-            batch_size=self.hparams.batch_size,
-            num_workers=self.hparams.num_workers,
-        )
+        return DataLoader(ds, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers)
 
     def test_dataloader(self):
-        return self.val_dataloader()
     #
+        return self.val_dataloader()
 
     @staticmethod
     def add_model_specific_args(parent_parser):
@@ -152,8 +148,8 @@ class MeshNetwork(LightningModule):
 
         parser = argparse.ArgumentParser(parents=[parent_parser], add_help=False)
 
-        parser.add_argument('--loss', default='mse', type=losses_type)
-
+        # parser.add_argument('--loss', default='mse', type=losses_type)
+        parser.add_argument('--output_dim', type=int, required=True)
         # gem-network params
         parser.add_argument('--gem_output_dim', default=1, type=int)
         parser.add_argument('--gem_num_rhos', nargs='+', default=[1], type=int)
@@ -166,17 +162,9 @@ class MeshNetwork(LightningModule):
 
         # dataset params
         parser.add_argument('--batch_size', default=1, type=int)
-        parser.add_argument('--train_data_root', required=True)
-        parser.add_argument('--test_data_root', required=True )
-        parser.add_argument('--val_data_root', required=True )
+        parser.add_argument('--data_root', required=True)
         parser.add_argument('--weighted_normals', action='store_true')
-        parser.add_argument('--feature_cols', nargs='*')
-        parser.add_argument('--target_cols', nargs='*')
         parser.add_argument('--num_workers', type=int, default=1)
-        parser.add_argument('--x_scale', type=float, default=1.0, nargs='*')
-        parser.add_argument('--y_scale', type=float, default=1.0, nargs='*')
-        parser.add_argument('--patch_radius', type=int, default=50)
-        parser.add_argument('--shuffle', type=bool, default=False)
 
         # optimizer params
         parser.add_argument('--learning_rate', type=float, default=1e-4)
@@ -185,8 +173,4 @@ class MeshNetwork(LightningModule):
         parser.add_argument('--lr_threshold', default=0.0001, type=float)
         parser.add_argument('--lr_warmup_num', default=500, type=int)
         parser.add_argument('--weight_decay', default=0.01, type=float)
-
-        parser.add_argument('--is_da', type=bool, default=False)
-        parser.add_argument('--mlp_dim', nargs='*', default=[2], type=int)
-        parser.add_argument('--with_sampler', default=False, type=bool)
         return parser

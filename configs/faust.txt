@@ -1,0 +1,22 @@
+--neptune_api_key eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vdWkubmVwdHVuZS5haSIsImFwaV91cmwiOiJodHRwczovL3VpLm5lcHR1bmUuYWkiLCJhcGlfa2V5IjoiZTdlYmFhNTAtMzRkMi00NGU2LTk1MWUtZjU3NGZjNGNiMWVjIn0=
+--neptune_project_name kommiu/gem-cnn-faust
+--neptune_experiment_name faust
+--gem_output_dim 64
+--gem_num_rhos 10 10 10
+--gem_max_rhos 2 2 2
+--gem_nonlinearity relu
+--head_channels 256
+--output_dim 6890
+--head_nonlinearity relu
+--batch_size 1
+--data_root /data
+--weighted_normals
+--learning_rate 0.001
+--lr_patience 4
+--lr_threshold 0.01
+--gpus 1
+--max_epochs 300
+--terminate_on_nan True
+--num_workers 10
+--weights_summary top
+
