@@ -1,1 +1,4 @@
 /data/
+/task_specific/make_stl.py
+/task_specific/
+/experiments/*

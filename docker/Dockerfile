@@ -1,4 +1,4 @@
-FROM pytorch/pytorch
+FROM pytorch/pytorch:1.5-cuda10.1-cudnn7-devel
 RUN apt update && apt install -y \
         build-essential \
         cmake \
@@ -48,6 +48,18 @@ RUN chown -R kommiu:kommiu $HOME
 #    ./setup.py build && \
 #    ./setup.py install
 
+ENV PATH=/usr/local/cuda/bin:$PATH
+ENV CPATH=/usr/local/cuda/include:$CPATH
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+RUN pip install  --no-cache-dir \
+    torch-scatter==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.5.0.html \
+    torch-sparse==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.5.0.html \
+    torch-cluster==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.5.0.html \
+    torch-spline-conv==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.5.0.html \
+    torch-geometric
+
+
 RUN pip install --no-cache-dir https://github.com/PytorchLightning/pytorch-lightning/archive/master.zip --upgrade
 RUN pip install --no-cache-dir \
 	pandas \
@@ -65,7 +77,8 @@ RUN pip install --no-cache-dir \
 	cython \
 	numba \
 	python-dotenv  \
-	numpy-stl
+	pyglet \
+	neptune-client
 RUN conda install -c conda-forge trimesh
 
 WORKDIR /home/kommiu/app
