@@ -275,6 +275,4 @@ class DAGemConv(MessagePassing):
 
     def message(self, x_j, theta, g, dist):
         x = self.transporter(x_j, g)
-        res = self.neighbour_kernel(x, theta) * self.distance_weight(dist)
-        print(res.shape)
-        return res
+        return self.neighbour_kernel(x, theta) * self.distance_weight(dist.unsqueeze(-1))

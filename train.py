@@ -4,8 +4,9 @@ import os
 from pytorch_lightning import Trainer
 from pytorch_lightning.logging.neptune import NeptuneLogger
 
-from gem_cnn.models.faust import MeshNetwork
+from gem_cnn.models.regression import MeshNetwork
 from time import sleep
+
 
 class LoadFromFile (argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):

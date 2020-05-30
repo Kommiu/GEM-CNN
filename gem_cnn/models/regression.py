@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import torch
 from pytorch_lightning import LightningModule
@@ -48,7 +49,7 @@ class MeshNetwork(LightningModule):
 
     def forward(self, data):
         x = self.gem_network(data)[data.target_nodes]
-        x = self.head(x)
+        x = self.head(x.unsqueeze(-1))
         return x
 
     def training_step(self, data, batch_nb):
