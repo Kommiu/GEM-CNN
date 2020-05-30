@@ -13,7 +13,10 @@ docker run \
   --rm \
   --shm-size=32G \
   --user kommiu \
+  --env NEPTUNE_API_KEY \
   -v $(pwd):/home/kommiu/app \
   -v $data_root:/data \
   gem-cnn \
   python $script --config $config_file
+
+

@@ -1,0 +1,38 @@
+--neptune_project_name kommiu/gem-cnn
+--neptune_experiment_name DAGEM
+--loss mse
+--gem_output_dim 16
+--gem_num_rhos 8 8 8 8
+--gem_max_rhos 2 2 2 2
+--gem_nonlinearity relu
+--head_channels 32 32
+--head_nonlinearity relu
+--train_data_root /data/train
+--test_data_root /data/test
+--val_data_root /data/test
+--weighted_normals
+--feature_cols fill_time_node
+--target_cols Deflection
+--patch_radius 20
+--shuffle True
+--learning_rate 0.001
+--lr_threshold 0.01
+--lr_patience 4
+--lr_factor 0.1
+--weight_decay 0.0
+--num_workers 8
+--x_scale 1
+--y_scale 10000
+--batch_size 1
+--terminate_on_nan True
+--max_epochs 300
+--gpus 1
+--accumulate_grad_batches 4
+--fast_dev_run False
+--weights_summary top
+--test_num_runs 200
+--test_input_dir /data/test/processed
+--test_output_dir /data/predictions
+--mlp_dims 16 16
+--is_da True
+--with_sampler True

@@ -1,4 +1,3 @@
---neptune_api_key eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vdWkubmVwdHVuZS5haSIsImFwaV91cmwiOiJodHRwczovL3VpLm5lcHR1bmUuYWkiLCJhcGlfa2V5IjoiZTdlYmFhNTAtMzRkMi00NGU2LTk1MWUtZjU3NGZjNGNiMWVjIn0=
 --neptune_project_name kommiu/gem-cnn-faust
 --neptune_experiment_name faust
 --gem_output_dim 64

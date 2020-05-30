@@ -1,10 +1,10 @@
 import argparse
+import os
 
 from pytorch_lightning import Trainer
 from pytorch_lightning.logging.neptune import NeptuneLogger
 
-from gem_cnn.models import MeshNetwork
-
+from gem_cnn.models.faust import MeshNetwork
 from time import sleep
 
 class LoadFromFile (argparse.Action):
@@ -20,7 +20,6 @@ def main():
     model_parser = MeshNetwork.add_model_specific_args(argparse.ArgumentParser())
 
     neptune_parser = argparse.ArgumentParser()
-    neptune_parser.add_argument('--neptune_api_key', required=True)
     neptune_parser.add_argument('--neptune_project_name', required=True)
     neptune_parser.add_argument('--neptune_experiment_name', required=True)
 
@@ -31,8 +30,10 @@ def main():
     neptune_args, config_lines = neptune_parser.parse_known_args(config_lines)
     model_args, config_lines = model_parser.parse_known_args(config_lines)
     trainer_args, _ = trainer_parser.parse_known_args(config_lines)
+
+    neptune_api_key = os.environ['NEPTUNE_API_KEY']
     neptune_logger = NeptuneLogger(
-        api_key=neptune_args.neptune_api_key,
+        api_key=neptune_api_key,
         project_name=neptune_args.neptune_project_name,
         experiment_name=neptune_args.neptune_experiment_name,
     )
