@@ -80,6 +80,7 @@ RUN pip install --no-cache-dir \
 	pyglet \
 	neptune-client
 RUN conda install -c conda-forge trimesh
+RUN pip install --no-cache-dir pytorch-memblab
 
 WORKDIR /home/kommiu/app
 

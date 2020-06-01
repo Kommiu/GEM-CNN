@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing
 from torch_geometric.nn.inits import uniform
 from torch_scatter import scatter_add
+from pytorch_memlab import MemReporter
 
 
 class Transporter(nn.Module):
@@ -20,12 +21,12 @@ class Transporter(nn.Module):
     @staticmethod
     def _rho(n, g):
 
-        return torch.stack([
-            torch.stack([torch.cos(n * g), -torch.sin(n * g)], dim=-1),
-            torch.stack([torch.sin(n * g), torch.cos(n * g)], dim=-1),
-        ],
-            dim=-1
-        )
+        operator = torch.zeros(len(g), 2, 2, dtype=g.dtype, device=g.device)
+        operator[:, 0, 0] = torch.cos(n * g)
+        operator[:, 0, 1] = -torch.sin(n * g)
+        operator[:, 1, 0] = torch.sin(n * g)
+        operator[:, 1, 1] = torch.cos(n * g)
+        return operator
 
     def forward(self, x, g):
         pos = 0
@@ -69,33 +70,45 @@ class BasicNeighbourKernel(nn.Module):
                 res = self.weights[0] * x
                 return res
             else:
-                # |E| x 2
-                res = torch.stack([torch.cos(m * theta), torch.sin(m * theta)], dim=-1).unsqueeze(dim=2) * self.weights[0]
-                res += torch.stack([torch.sin(m * theta), -torch.cos(m * theta)], dim=-1).unsqueeze(dim=2) * self.weights[1]
+                # |E| x 2 x 1
+                res = torch.zeros(len(theta), 2, 1, device=theta.device, dtype=theta.dtype)
+                res[:, 0, 0] += torch.cos(m * theta) * self.weights[0] + torch.sin(m * theta) * self.weights[1]
+                res[:, 1, 0] += torch.sin(m * theta) * self.weights[0] - torch.cos(m * theta) * self.weights[1]
+
         else:
+            # |E| x 1 x 2
             if m == 0:
-                res = torch.stack([torch.cos(n * theta), torch.sin(n * theta)], dim=-1).unsqueeze(dim=1)*self.weights[0]
-                res += torch.stack([torch.sin(n * theta), -torch.cos(n * theta)], dim=-1).unsqueeze(dim=1)*self.weights[1]
+                res = torch.zeros(len(theta), 1, 2, device=theta.device, dtype=theta.dtype)
+                res[:, 0, 0] += torch.cos(n * theta) * self.weights[0] + torch.sin(n * theta) * self.weights[1]
+                res[:, 0, 1] += torch.sin(n * theta) * self.weights[0] + torch.cos(n * theta) * self.weights[1]
 
             else:
+                # |E| x 2 x 2
+                res = torch.zeros(len(theta), 2, 2, device=theta.device, dtype=theta.dtype)
 
+                res[:, 0, 0] = torch.cos(theta * (m - n)) * self.weights[0] + \
+                    torch.sin(theta * (m - n)) * self.weights[1] + \
+                    torch.cos(theta * (m + n)) * self.weights[2] + \
+                    - torch.sin(theta * (m + n)) * self.weights[3]
+
+                res[:, 0, 1] = -torch.sin(theta * (m - n)) * self.weights[0] + \
+                    torch.cos(theta * (m - n)) * self.weights[1] + \
+                    torch.sin(theta * (m + n)) * self.weights[2] + \
+                    torch.cos(theta * (m + n)) * self.weights[3]
+
+                res[:, 1, 0] = torch.sin(theta * (m - n)) * self.weights[0] + \
+                    -torch.cos(theta * (m - n)) * self.weights[1] + \
+                    torch.sin(theta * (m + n)) * self.weights[2] + \
+                    torch.cos(theta * (m + n)) * self.weights[3]
+
+                res[:, 1, 1] = torch.cos(theta * (m - n)) * self.weights[0] + \
+                    torch.sin(theta * (m - n)) * self.weights[1] + \
+                    -torch.cos(theta * (m + n)) * self.weights[2] + \
+                    torch.sin(theta * (m + n)) * self.weights[3]
                 res = torch.stack([
                     torch.cos(theta * (m - n)), -torch.sin(theta * (m - n)),
                     torch.sin(theta * (m - n)), torch.cos(theta * (m - n)),
                 ], dim=-1).reshape(-1, 2, 2) * self.weights[0]
-
-                res += torch.stack([
-                    torch.sin(theta * (m - n)), torch.cos(theta * (m - n)),
-                    -torch.cos(theta * (m - n)), torch.sin(theta * (m - n)),
-                ], dim=-1).reshape(-1, 2, 2) * self.weights[1]
-                res += torch.stack([
-                    torch.cos(theta * (m + n)), torch.sin(theta * (m + n)),
-                    torch.sin(theta * (m + n)), -torch.cos(theta * (m + n)),
-                ], dim=-1).reshape(-1, 2, 2) * self.weights[2]
-                res += torch.stack([
-                    -torch.sin(theta * (m + n)), torch.cos(theta * (m + n)),
-                    torch.cos(theta * (m + n)), torch.sin(theta * (m + n))
-                ], dim=-1).reshape(-1, 2, 2) * self.weights[3]
 
         res = torch.einsum('pj, pij -> pi', x, res)
 
@@ -119,17 +132,18 @@ class NeighbourKernel(nn.Module):
     def forward(self, x, theta):
         m = len(self.rho_out)
         n = len(self.rho_in)
-        res = torch.empty(len(x), 0, dtype=x.dtype, device=x.device)
+        c_out = sum(1 if x == 0 else 2 for x in self.rho_out)
+        res = torch.zeros(len(x), c_out, dtype=x.dtype, device=x.device)
+        pos_out = 0
         for i in range(m):
-            pos = 0
-            row = torch.zeros(len(x), 2 ** (np.sign(self.rho_out[i])), dtype=x.dtype, device=x.device)
+            width_out = 1 if self.rho_out[i] == 0 else 2
+            pos_in = 0
             for j in range(n):
+                width_in = 1 if self.rho_in[j] == 0 else 2
                 ker = self.kernels[i * n + j]
-                width = 2 ** (np.sign(self.rho_in[j]))
-                row += ker(x[:, pos: pos + width], theta)
-                pos += width
-            res = torch.cat([res, row], dim=-1)
-
+                res[:, pos_out: pos_out + width_out] += ker(x[:, pos_in: pos_in + width_in], theta)
+                pos_in += width_in
+            pos_out += width_out
         return res
 
 
@@ -168,8 +182,8 @@ class BasicSelfKernel(nn.Module):
             if m == 0:
                 return self.weights[0] * x
             else:
-                kernel = self.weights[0] * torch.eye(2, device=x.device)\
-                       + self.weights[1] * torch.FloatTensor([[0, 1], [-1, 0]]).to(x.device)
+                kernel = self.weights[0] * torch.eye(2, dtype=x.dtype, device=x.device)\
+                       + self.weights[1] * torch.tensor([[0, 1], [-1, 0]], dtype=x.dtype, device=x.device)
                 return x @ kernel
 
 class SelfKernel(nn.Module):
@@ -186,20 +200,20 @@ class SelfKernel(nn.Module):
     def forward(self, x):
         m = len(self.rho_out)
         n = len(self.rho_in)
-        res = torch.empty(len(x), 0, dtype=x.dtype, device=x.device)
+        c_out = sum(1 if x == 0 else 2 for x in self.rho_out)
+        res = torch.zeros(len(x), c_out, dtype=x.dtype, device=x.device)
+        pos_out = 0
         for i in range(m):
-            pos = 0
-            row = torch.zeros(len(x), 2 ** (np.sign(self.rho_out[i])), dtype=x.dtype, device=x.device)
+            pos_in = 0
+            width_out = 1 if self.rho_out[i] == 0 else 2
             for j in range(n):
                 if self.rho_in[j] != self.rho_out[i]:
                     continue
                 ker = self.kernels[i * n + j]
-                width = 2 ** (np.sign(self.rho_in[j]))
-                row += ker(x[:, pos: pos + width])
-                pos += width
-
-            res = torch.cat([res, row], dim=-1)
-
+                width_in = 1 if self.rho_in[j] == 0 else 2
+                res[:, pos_out: pos_out + width_out] += ker(x[:, pos_in: pos_in + width_in])
+                pos_in += width_in
+            pos_out += width_out
         return res
 
 
@@ -209,9 +223,11 @@ class GemConv(MessagePassing):
         self.neighbour_kernel = NeighbourKernel(rho_in, rho_out)
         self.transporter = Transporter(rho_in)
         self.self_kernel = SelfKernel(rho_in, rho_out)
+        # self.reporter = MemReporter(self)
 
     def forward(self, x, theta, g, edge_index):
         neighbours = self.propagate(edge_index, x=x, g=g, theta=theta)
+        # self.reporter.report()
         return neighbours + self.self_kernel(x)
 
     def message(self, x_j, theta, g):

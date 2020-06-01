@@ -40,7 +40,6 @@ class MeshNetwork(LightningModule):
             GetLocalPatch(self.hparams.patch_radius, len(self.gem_network.gem_convs)),
             Scale(self.hparams.x_scale, self.hparams.y_scale)
         ]) if self.hparams.with_sampler else Scale(self.hparams.x_scale, self.hparams.y_scale)
-        # ScaledZNormalize(hparams.x_scale, hparams.y_scale)
         head_channels = [hparams.gem_output_dim] + hparams.head_channels + [self.output_dim]
         self.head = ConvHead(
             head_channels,
@@ -48,19 +47,19 @@ class MeshNetwork(LightningModule):
         )
 
     def forward(self, data):
-        x = self.gem_network(data)[data.target_nodes]
+        x = self.gem_network(data)
         x = self.head(x.unsqueeze(-1))
         return x
 
     def training_step(self, data, batch_nb):
         y_hat = self(data).squeeze()
-        loss = self.loss(y_hat, data.y.squeeze()[data.target_nodes])
+        loss = self.loss(y_hat, data.y.squeeze())
         logs = {'train_loss': loss}
         return {'loss': loss, 'log': logs}
 
     def validation_step(self, data, data_nb):
         y_hat = self(data).squeeze()
-        mse = self.loss(y_hat, data.y.squeeze()[data.target_nodes])
+        mse = self.loss(y_hat, data.y.squeeze())
         return {'val_loss': mse,}
 
     def validation_epoch_end(self, outputs):
@@ -70,7 +69,7 @@ class MeshNetwork(LightningModule):
 
     def test_step(self, data, data_nb):
         y_hat = self(data).squeeze()
-        return {'test_loss': self.loss(y_hat, data.y.squeeze()[data.target_nodes])}
+        return {'test_loss': self.loss(y_hat, data.y.squeeze())}
 
     def test_epoch_end(self, outputs):
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
@@ -187,7 +186,7 @@ class MeshNetwork(LightningModule):
         parser.add_argument('--lr_warmup_num', default=500, type=int)
         parser.add_argument('--weight_decay', default=0.01, type=float)
 
-        parser.add_argument('--is_da', type=bool, default=False)
+        parser.add_argument('--is_da', action='store_true')
         parser.add_argument('--mlp_dim', nargs='*', default=[2], type=int)
-        parser.add_argument('--with_sampler', default=False, type=bool)
+        parser.add_argument('--with_sampler', action='store_true')
         return parser

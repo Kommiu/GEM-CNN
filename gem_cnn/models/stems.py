@@ -75,7 +75,7 @@ class GEMNet(nn.Module):
             for i in range(1, len(self.gem_convs) - 1):
                 x = self.gem_convs[i](x, theta, g, edge_index, data.distance)
                 x = self.nonlinearities[i](x)
-                x = self.nonlinearity(self.gem_convs[-1](x, theta, g, edge_index, data.distance))
+            x = self.nonlinearity(self.gem_convs[-1](x, theta, g, edge_index, data.distance))
 
         else:
             x = self.gem_convs[0](x, theta, g, edge_index)
@@ -83,6 +83,6 @@ class GEMNet(nn.Module):
             for i in range(1, len(self.gem_convs) - 1):
                 x = self.gem_convs[i](x, theta, g, edge_index)
                 x = self.nonlinearities[i](x)
-                x = self.nonlinearity(self.gem_convs[-1](x, theta, g, edge_index))
+            x = self.nonlinearity(self.gem_convs[-1](x, theta, g, edge_index))
 
         return x

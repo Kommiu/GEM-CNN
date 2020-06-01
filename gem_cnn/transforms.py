@@ -111,9 +111,9 @@ class Scale(object):
         self.scale_y = torch.tensor(scale_y)
 
     def __call__(self, data):
-        data.x =  data.x * self.scale_x
-        data.y =  data.y * self.scale_y
+        data.x = data.x * self.scale_x
+        data.y = data.y * self.scale_y
         return data
 
     def __repr__(self):
-        return f'{self.__class__.__name__}: x_scale={self.scale_x.tolist()}, y_scla={self.scale_y.tolist()}'
+        return f'{self.__class__.__name__}: x_scale={self.scale_x.tolist()}, y_scale={self.scale_y.tolist()}'

@@ -1,11 +1,11 @@
---neptune_project_name kommiu/test-run
---neptune_experiment_name test
+--neptune_project_name kommiu/debug
+--neptune_experiment_name debug
 --loss mse
 --gem_output_dim 16
---gem_num_rhos 2 2
+--gem_num_rhos 8 8
 --gem_max_rhos 2 2
 --gem_nonlinearity relu
---head_channels 2
+--head_channels 16
 --head_nonlinearity relu
 --train_data_root /data/train
 --test_data_root /data/test
@@ -34,5 +34,6 @@
 --test_input_dir /data/test/processed
 --test_output_dir /data/predictions
 --mlp_dims 2 2
---is_da True
---with_sampler True
+--default_root_dir ./logs
+--with_sampler
+
