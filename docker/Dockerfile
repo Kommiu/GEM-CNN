@@ -59,7 +59,7 @@ RUN pip install  --no-cache-dir \
     torch-spline-conv==latest+cu101 -f https://pytorch-geometric.com/whl/torch-1.5.0.html \
     torch-geometric
 
-
+RUN conda install -c conda-forge trimesh
 RUN pip install --no-cache-dir https://github.com/PytorchLightning/pytorch-lightning/archive/master.zip --upgrade
 RUN pip install --no-cache-dir \
 	pandas \
@@ -78,9 +78,11 @@ RUN pip install --no-cache-dir \
 	numba \
 	python-dotenv  \
 	pyglet \
-	neptune-client
-RUN conda install -c conda-forge trimesh
-RUN pip install --no-cache-dir pytorch-memblab
+	neptune-client \
+	pytorch_memlab \
+    pyyaml \
+    click
+
 
 WORKDIR /home/kommiu/app
 

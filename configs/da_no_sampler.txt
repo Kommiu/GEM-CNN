@@ -1,11 +1,11 @@
 --neptune_project_name kommiu/gem-cnn
 --neptune_experiment_name DAGEM
 --loss mse
---gem_output_dim 64
---gem_num_rhos 16 16 16 16
---gem_max_rhos 2 2 2 2
+--gem_output_dim 8
+--gem_num_rhos 4 4
+--gem_max_rhos 2 2
 --gem_nonlinearity relu
---head_channels 128
+--head_channels 16 32
 --head_nonlinearity relu
 --train_data_root /data/train
 --test_data_root /data/test
@@ -28,5 +28,5 @@
 --accumulate_grad_batches 1
 --fast_dev_run False
 --weights_summary top
---mlp_dims 16 16
+--mlp_dims 4 4
 --is_da

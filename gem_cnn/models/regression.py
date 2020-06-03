@@ -187,6 +187,6 @@ class MeshNetwork(LightningModule):
         parser.add_argument('--weight_decay', default=0.01, type=float)
 
         parser.add_argument('--is_da', action='store_true')
-        parser.add_argument('--mlp_dim', nargs='*', default=[2], type=int)
+        parser.add_argument('--mlp_dims', nargs='*', default=[2], type=int)
         parser.add_argument('--with_sampler', action='store_true')
         return parser
