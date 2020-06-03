@@ -60,8 +60,9 @@ RUN pip install  --no-cache-dir \
     torch-geometric
 
 RUN conda install -c conda-forge trimesh
-RUN pip install --no-cache-dir https://github.com/PytorchLightning/pytorch-lightning/archive/master.zip --upgrade
+#RUN pip install --no-cache-dir https://github.com/PytorchLightning/pytorch-lightning/archive/master.zip --upgrade
 RUN pip install --no-cache-dir \
+    pytorch-lightning \
 	pandas \
 	notebook\
 	jupyter \

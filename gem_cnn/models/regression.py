@@ -33,7 +33,7 @@ class MeshNetwork(LightningModule):
             hparams.gem_max_rhos,
             hparams.gem_nonlinearity,
             hparams.is_da,
-            hparams.mlp_dim,
+            hparams.mlp_dims,
         )
 
         self.transform = Compose([

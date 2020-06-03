@@ -1,0 +1,45 @@
+model:
+  task: regression
+  loss: mse
+  gem_output_dim: 2
+  gem_num_rhos: [4, 4]
+  gem_max_rhos: [2, 2]
+  gem_nonlinearity:
+    relu
+  head_channels: [2]
+  head_nonlinearity: relu
+  batch_size: 1
+  train_data_root: /data/train
+  val_data_root: /data/val
+  test_data_root: /data/test
+  weighted_normals: True
+  feature_cols:
+    - fill_time_node
+  target_cols:
+    - Deflection
+  num_workers: 8
+  x_scale: 1
+  y_scale: 10000
+  patch_radius: 10
+  shuffle: False
+  learning_rate: 0.01
+  lr_factor: 0.5
+  lr_patience: 10
+  lr_threshold: 0.01
+  lr_warmup_num: 500
+  weight_decay: 0.1
+  is_da: True
+  mlp_dims: [16]
+  with_sampler: False
+logger:
+  project_name: kommiu/debug
+  experiment_name: debug
+  tags:
+    - debug
+trainer:
+  max_epochs: 100
+  gpus: 1
+  accumulate_grad_batches: 1
+  fast_dev_run: False
+  weights_summary: top
+  default_root_dir: ./logs

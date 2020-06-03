@@ -105,10 +105,6 @@ class BasicNeighbourKernel(nn.Module):
                     torch.sin(theta * (m - n)) * self.weights[1] + \
                     -torch.cos(theta * (m + n)) * self.weights[2] + \
                     torch.sin(theta * (m + n)) * self.weights[3]
-                res = torch.stack([
-                    torch.cos(theta * (m - n)), -torch.sin(theta * (m - n)),
-                    torch.sin(theta * (m - n)), torch.cos(theta * (m - n)),
-                ], dim=-1).reshape(-1, 2, 2) * self.weights[0]
 
         res = torch.einsum('pj, pij -> pi', x, res)
 
