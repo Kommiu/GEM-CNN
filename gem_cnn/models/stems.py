@@ -70,19 +70,19 @@ class GEMNet(nn.Module):
         theta = data.theta
         g = data.g
         if self.is_da:
-            x = self.gem_convs[0](x, theta, g, edge_index, data.distance)
+            x = x + self.gem_convs[0](x, theta, g, edge_index, data.distance)
             x = self.nonlinearities[0](x)
             for i in range(1, len(self.gem_convs) - 1):
-                x = self.gem_convs[i](x, theta, g, edge_index, data.distance)
+                x = x + self.gem_convs[i](x, theta, g, edge_index, data.distance)
                 x = self.nonlinearities[i](x)
-            x = self.nonlinearity(self.gem_convs[-1](x, theta, g, edge_index, data.distance))
+            x = self.nonlinearity(x + self.gem_convs[-1](x, theta, g, edge_index, data.distance))
 
         else:
-            x = self.gem_convs[0](x, theta, g, edge_index)
+            x = x + self.gem_convs[0](x, theta, g, edge_index)
             x = self.nonlinearities[0](x)
             for i in range(1, len(self.gem_convs) - 1):
-                x = self.gem_convs[i](x, theta, g, edge_index)
+                x = x + self.gem_convs[i](x, theta, g, edge_index)
                 x = self.nonlinearities[i](x)
-            x = self.nonlinearity(self.gem_convs[-1](x, theta, g, edge_index))
+            x = self.nonlinearity(x + self.gem_convs[-1](x, theta, g, edge_index))
 
         return x
