@@ -1,0 +1,37 @@
+model:
+  task: segmentation
+  loss: cross-entropy
+  gem_output_dim: 2
+  gem_num_rhos: [16, 16, 16]
+  gem_max_rhos: [2, 2, 2]
+  gem_nonlinearity:
+    relu
+  head_channels: [256]
+  head_nonlinearity: relu
+  batch_size: 1
+  data_root: /data
+  weighted_normals: True
+  num_workers: 10
+  patch_radius: 10
+  shuffle: False
+  learning_rate: 0.01
+  lr_factor: 0.5
+  lr_patience: 4
+  lr_threshold: 0.01
+  lr_warmup_num: 500
+  weight_decay: 0.1
+  is_da: False
+  with_sampler: True
+logger:
+  project_name: kommiu/gem-cnn-faust
+  experiment_name: faust
+  tags:
+    - segmentation
+    - faust
+trainer:
+  max_epochs: 500
+  gpus: 1
+  accumulate_grad_batches: 16
+  fast_dev_run: False
+  weights_summary: top
+  default_root_dir: ./logs
