@@ -7,6 +7,7 @@ model:
   gem_nonlinearity:
     relu
   head_channels: [256]
+  output_dim: 6890
   head_nonlinearity: relu
   batch_size: 1
   data_root: /data
@@ -21,7 +22,7 @@ model:
   lr_warmup_num: 500
   weight_decay: 0.1
   is_da: False
-  with_sampler: True
+  with_sampler: False
 logger:
   project_name: kommiu/gem-cnn-faust
   experiment_name: faust
