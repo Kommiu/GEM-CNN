@@ -1,10 +1,9 @@
 import argparse
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from pytorch_lightning import LightningModule
-from torch import nn as nn
-from torch_geometric.transforms import Compose
-
 import gem_cnn.utils
 from gem_cnn.datasets import FAUST
 from gem_cnn.models.heads import MLPHead, ConvHead
@@ -38,10 +37,6 @@ class MeshNetwork(LightningModule):
         )
 
     def forward(self, data):
-        # for key in data.keys:
-        #     if torch.isnan(data[key]).any():
-        #         print(key)
-        #         raise Exception
         x = self.gem_network(data)
         x = self.head(x.unsqueeze(dim=-1)).squeeze()
         return F.log_softmax(x, dim=1)
@@ -129,7 +124,6 @@ class MeshNetwork(LightningModule):
         return DataLoader(ds, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers)
 
     def test_dataloader(self):
-    #
         return self.val_dataloader()
 
     @staticmethod

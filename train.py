@@ -27,7 +27,7 @@ def main(config):
     if model_args.task == 'regression':
         from gem_cnn.models.regression import MeshNetwork
     elif model_args.task == 'segmentation':
-        from gem_cnn.models.faust import MeshNetwork
+        from gem_cnn.models.segmentation import MeshNetwork
     else:
         raise Exception('Unknown task')
 
