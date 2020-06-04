@@ -96,3 +96,56 @@ class ModuleType:
 
     def __call__(self, key):
         return self._dict[key]
+
+
+def get_neighbor_basis(theta, n, m):
+   basis = torch.zeros(
+       len(theta), 2, 2, 4,
+       device=theta.device, dtype=theta.dtype,
+   )
+   basis[:, 0, 0, 0] += torch.cos(theta * (m - n))
+   basis[:, 0, 1, 0] += -torch.sin(theta * (m - n))
+   basis[:, 1, 0, 0] += torch.sin(theta * (m - n))
+   basis[:, 1, 1, 0] += torch.cos(theta * (m - n))
+
+   basis[:, 0, 0, 1] += torch.sin(theta * (m - n))
+   basis[:, 0, 1, 1] += torch.cos(theta * (m - n))
+   basis[:, 1, 0, 1] += -torch.cos(theta * (m - n))
+   basis[:, 1, 1, 1] += torch.sin(theta * (m - n))
+
+   basis[:, 0, 0, 2] += torch.cos(theta * (m + n))
+   basis[:, 0, 1, 2] += torch.sin(theta * (m + n))
+   basis[:, 1, 0, 2] += torch.sin(theta * (m + n))
+   basis[:, 1, 1, 2] += -torch.cos(theta * (m + n))
+
+   basis[:, 0, 0, 3] += -torch.sin(theta * (m + n))
+   basis[:, 0, 1, 3] += torch.cos(theta * (m + n))
+   basis[:, 1, 0, 3] += torch.cos(theta * (m + n))
+   basis[:, 1, 1, 3] += torch.sin(theta * (m + n))
+
+   return basis
+
+
+def get_neighbor_basis_0(theta, n):
+    basis = torch.zeros(
+        len(theta), 2, 1, 2,
+        device=theta.device, dtype=theta.dtype,
+    )
+    basis[:, 0, 0, 0] += torch.cos(n * theta)
+    basis[:, 1, 0, 0] += torch.sin(n * theta)
+    basis[:, 0, 0, 1] += torch.sin(n * theta)
+    basis[:, 1, 0, 1] += -torch.cos(n * theta)
+    return basis
+
+
+def get_self_basis(dtype, device):
+    basis = torch.zeros(
+        2, 2, 2,
+        dtype=dtype, device=device,
+    )
+    basis[:, :, 0] += torch.eye(2, dtype=dtype, device=device)
+    basis[:, :, 1] += torch.tensor(
+        [[0, 1], [-1, 0]],
+        dtype=dtype, device=device,
+    )
+    return basis
