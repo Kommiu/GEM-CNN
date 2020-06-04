@@ -18,17 +18,8 @@ class Transporter(nn.Module):
     def __repr__(self):
         return f'{self.__class__.__name__}: {self.rhos}'
 
-    @staticmethod
-    def _rho(n, g):
 
-        operator = torch.zeros(len(g), 2, 2, dtype=g.dtype, device=g.device)
-        operator[:, 0, 0] = torch.cos(n * g)
-        operator[:, 0, 1] = -torch.sin(n * g)
-        operator[:, 1, 0] = torch.sin(n * g)
-        operator[:, 1, 1] = torch.cos(n * g)
-        return operator
-
-    def forward(self, x, g):
+    def forward(self, x, operators):
         pos = 0
         res = torch.zeros_like(x)
         for i, n in enumerate(self.rhos):
@@ -36,8 +27,7 @@ class Transporter(nn.Module):
             if n == 0:
                 res[:, pos] += x[:, pos]
             else:
-                operator = self._rho(n, g)
-                res[:, pos: pos + width] += torch.einsum('pj, pij -> pi', x[:, pos: pos + width], operator)
+                res[:, pos: pos + width] += torch.einsum('pj, pij -> pi', x[:, pos: pos + width], operators[n])
             pos += width
 
         return res
@@ -63,52 +53,15 @@ class BasicNeighbourKernel(nn.Module):
     def __repr__(self):
         return f'{self.__class__.__name__}: {self.n}, {self.m}'
 
-    def forward(self, x, theta):
+    def forward(self, x, basis=None):
         n, m = self.n, self.m
-        if n == 0:
-            if m == 0:
-                res = self.weights[0] * x
-                return res
-            else:
-                # |E| x 2 x 1
-                res = torch.zeros(len(theta), 2, 1, device=theta.device, dtype=theta.dtype)
-                res[:, 0, 0] += torch.cos(m * theta) * self.weights[0] + torch.sin(m * theta) * self.weights[1]
-                res[:, 1, 0] += torch.sin(m * theta) * self.weights[0] - torch.cos(m * theta) * self.weights[1]
+        if n == m == 0:
+            return x * self.weights
 
-        else:
-            # |E| x 1 x 2
-            if m == 0:
-                res = torch.zeros(len(theta), 1, 2, device=theta.device, dtype=theta.dtype)
-                res[:, 0, 0] += torch.cos(n * theta) * self.weights[0] + torch.sin(n * theta) * self.weights[1]
-                res[:, 0, 1] += torch.sin(n * theta) * self.weights[0] + torch.cos(n * theta) * self.weights[1]
-
-            else:
-                # |E| x 2 x 2
-                res = torch.zeros(len(theta), 2, 2, device=theta.device, dtype=theta.dtype)
-
-                res[:, 0, 0] = torch.cos(theta * (m - n)) * self.weights[0] + \
-                    torch.sin(theta * (m - n)) * self.weights[1] + \
-                    torch.cos(theta * (m + n)) * self.weights[2] + \
-                    - torch.sin(theta * (m + n)) * self.weights[3]
-
-                res[:, 0, 1] = -torch.sin(theta * (m - n)) * self.weights[0] + \
-                    torch.cos(theta * (m - n)) * self.weights[1] + \
-                    torch.sin(theta * (m + n)) * self.weights[2] + \
-                    torch.cos(theta * (m + n)) * self.weights[3]
-
-                res[:, 1, 0] = torch.sin(theta * (m - n)) * self.weights[0] + \
-                    -torch.cos(theta * (m - n)) * self.weights[1] + \
-                    torch.sin(theta * (m + n)) * self.weights[2] + \
-                    torch.cos(theta * (m + n)) * self.weights[3]
-
-                res[:, 1, 1] = torch.cos(theta * (m - n)) * self.weights[0] + \
-                    torch.sin(theta * (m - n)) * self.weights[1] + \
-                    -torch.cos(theta * (m + n)) * self.weights[2] + \
-                    torch.sin(theta * (m + n)) * self.weights[3]
-
-        res = torch.einsum('pj, pij -> pi', x, res)
-
-        return res
+        # basis: batch x c_out x c_in x
+        kernel = (basis * self.weights).sum(-1).rename(None)
+        # kernel: batch x c_out x c_in
+        return torch.einsum('boi, bi -> bo', kernel, x)
 
 
 class NeighbourKernel(nn.Module):
@@ -125,7 +78,8 @@ class NeighbourKernel(nn.Module):
     def __repr__(self):
         return f'{self.__class__.__name__}: {self.rho_in}, {self.rho_out}'
 
-    def forward(self, x, theta):
+    def forward(self, x, bases):
+
         m = len(self.rho_out)
         n = len(self.rho_in)
         c_out = sum(1 if x == 0 else 2 for x in self.rho_out)
@@ -137,7 +91,10 @@ class NeighbourKernel(nn.Module):
             for j in range(n):
                 width_in = 1 if self.rho_in[j] == 0 else 2
                 ker = self.kernels[i * n + j]
-                res[:, pos_out: pos_out + width_out] += ker(x[:, pos_in: pos_in + width_in], theta)
+                res[:, pos_out: pos_out + width_out] += ker(
+                    x[:, pos_in: pos_in + width_in],
+                    bases.get((self.rho_in[j], self.rho_out[i]), None)
+                )
                 pos_in += width_in
             pos_out += width_out
         return res
@@ -147,40 +104,25 @@ class BasicSelfKernel(nn.Module):
 
     def __init__(self, n, m):
         super().__init__()
-        self.m = m
+        assert m == n
         self.n = n
-        if m == n == 0:
-            self.weights = nn.Parameter(torch.FloatTensor(1))
-        elif m == 0 or n == 0:
-            self.weights = None
+        if n == 0:
+            self.weights = nn.Parameter(torch.ones(1))
         else:
-            self.weights = nn.Parameter(torch.FloatTensor(2))
+            self.weights = nn.Parameter(torch.ones(2))
 
         self.reset_parameters()
 
     def reset_parameters(self):
-        if self.weights is not None:
-            uniform(self.weights.size(0), self.weights)
+        uniform(self.weights.size(0), self.weights)
 
-    def forward(self, x):
-        n, m = self.n, self.m
-        if m != n:
-            if m == 0:
-                # x = |E| x 2
-                return torch.zeros_like(x)
-            elif n == 0:
-                # x = |E| x 1
-                return F.pad(torch.zeros_like(x), (0, 1), 'constant', 0)
-            else:
-                # x = |E| x 2
-                return torch.zeros_like(x)
+    def forward(self, x, basis=None):
+        n = self.n
+        if n == 0:
+            return self.weights[0] * x
         else:
-            if m == 0:
-                return self.weights[0] * x
-            else:
-                kernel = self.weights[0] * torch.eye(2, dtype=x.dtype, device=x.device)\
-                       + self.weights[1] * torch.tensor([[0, 1], [-1, 0]], dtype=x.dtype, device=x.device)
-                return x @ kernel
+            kernel = (basis * self.weights).sum(-1).rename(None)
+            return x @ kernel
 
 class SelfKernel(nn.Module):
     def __init__(self, rho_in, rho_out):
@@ -191,9 +133,9 @@ class SelfKernel(nn.Module):
         self.kernels = nn.ModuleList()
 
         for m, n in product(rho_out, rho_in):
-            self.kernels.append(BasicSelfKernel(n, m))
+            self.kernels.append(BasicSelfKernel(n, m) if m == n else nn.Identity())
 
-    def forward(self, x):
+    def forward(self, x, basis):
         m = len(self.rho_out)
         n = len(self.rho_in)
         c_out = sum(1 if x == 0 else 2 for x in self.rho_out)
@@ -207,7 +149,7 @@ class SelfKernel(nn.Module):
                     continue
                 ker = self.kernels[i * n + j]
                 width_in = 1 if self.rho_in[j] == 0 else 2
-                res[:, pos_out: pos_out + width_out] += ker(x[:, pos_in: pos_in + width_in])
+                res[:, pos_out: pos_out + width_out] += ker(x[:, pos_in: pos_in + width_in], basis)
                 pos_in += width_in
             pos_out += width_out
         return res
@@ -221,14 +163,14 @@ class GemConv(MessagePassing):
         self.self_kernel = SelfKernel(rho_in, rho_out)
         # self.reporter = MemReporter(self)
 
-    def forward(self, x, theta, g, edge_index):
-        neighbours = self.propagate(edge_index, x=x, g=g, theta=theta)
+    def forward(self, x, neighbour_bases, self_basis, operators, edge_index):
+        neighbours = self.propagate(edge_index, x=x, neighbour_bases=neighbour_bases, operators=operators)
         # self.reporter.report()
-        return neighbours + self.self_kernel(x)
+        return neighbours + self.self_kernel(x, self_basis)
 
-    def message(self, x_j, theta, g):
-        x = self.transporter(x_j, g)
-        return self.neighbour_kernel(x, theta)
+    def message(self, x_j, neighbour_bases, operators):
+        x = self.transporter(x_j, operators)
+        return self.neighbour_kernel(x, neighbour_bases)
 
 
 class RegularNonlinearity(nn.Module):

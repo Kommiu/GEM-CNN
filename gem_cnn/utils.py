@@ -1,4 +1,5 @@
 from typing import Dict
+from itertools import product
 
 import numpy as np
 import torch
@@ -149,3 +150,28 @@ def get_self_basis(dtype, device):
         dtype=dtype, device=device,
     )
     return basis
+
+
+def get_bases(theta, rhos_in, rhos_out):
+    bases = {
+        (n, m): get_neighbor_basis(theta, n, m).contiguous()
+        for n, m
+        in product(rhos_in, rhos_out)
+    }
+    for n in rhos_in:
+        bases[(n, 0)] = get_neighbor_basis_0(theta, n).transpose(1, 2).contiguous()
+
+    for m in rhos_out:
+        bases[(0, m)] = get_neighbor_basis_0(theta, m).contiguous()
+
+    return bases
+
+
+def get_operator(n, g):
+
+    operator = torch.zeros(len(g), 2, 2, dtype=g.dtype, device=g.device)
+    operator[:, 0, 0] = torch.cos(n * g)
+    operator[:, 0, 1] = -torch.sin(n * g)
+    operator[:, 1, 0] = torch.sin(n * g)
+    operator[:, 1, 1] = torch.cos(n * g)
+    return operator

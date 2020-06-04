@@ -28,7 +28,7 @@ model:
   lr_threshold: 0.01
   lr_warmup_num: 500
   weight_decay: 0.1
-  is_da: True
+  is_da: False
   mlp_dims: [16]
   with_sampler: False
 logger:

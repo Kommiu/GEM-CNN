@@ -2,6 +2,7 @@ import torch
 from torch import nn as nn
 
 from gem_cnn.modules import DAGemConv, GemConv, RegularNonlinearity
+import gem_cnn.utils as utils
 
 
 class GEMNet(nn.Module):
@@ -67,8 +68,12 @@ class GEMNet(nn.Module):
     def forward(self, data):
         x = torch.cat([data.pos, data.x], dim=1)
         edge_index = data.edge_index
-        theta = data.theta
-        g = data.g
+
+        max_rho = max(self.max_rhos) + 1
+        bases = utils.get_bases(data.theta, range(1, max_rho), range(1, max_rho))
+        self_basis = utils.get_self_basis(x.dtype, x.device)
+        operators = {n: utils.get_operator(n, data.g) for n in range(1, max_rho)}
+
         if self.is_da:
             x = self.gem_convs[0](x, theta, g, edge_index, data.distance)
             x = self.nonlinearities[0](x)
@@ -78,11 +83,13 @@ class GEMNet(nn.Module):
             x = self.nonlinearity(self.gem_convs[-1](x, theta, g, edge_index, data.distance))
 
         else:
-            x = self.gem_convs[0](x, theta, g, edge_index)
+            x = self.gem_convs[0](x, bases, self_basis, operators, edge_index)
             x = self.nonlinearities[0](x)
+            print(x.shape)
             for i in range(1, len(self.gem_convs) - 1):
-                x = self.gem_convs[i](x, theta, g, edge_index)
+                x = self.gem_convs[i](x, bases, self_basis, operators, edge_index)
                 x = self.nonlinearities[i](x)
-            x = self.nonlinearity(self.gem_convs[-1](x, theta, g, edge_index))
+                print(x.shape)
+            x = self.nonlinearity(self.gem_convs[-1](x, bases, self_basis, operators, edge_index))
 
         return x
