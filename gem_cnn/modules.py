@@ -214,16 +214,14 @@ class SelfKernel(nn.Module):
 
 
 class GemConv(MessagePassing):
-    def __init__(self, rho_in, rho_out):
+    def __init__(self, rho_in, rho_out, *args, **kwargs):
         super(GemConv, self).__init__(aggr='add',  flow='target_to_source',)  # "Add" aggregation.
         self.neighbour_kernel = NeighbourKernel(rho_in, rho_out)
         self.transporter = Transporter(rho_in)
         self.self_kernel = SelfKernel(rho_in, rho_out)
-        # self.reporter = MemReporter(self)
 
-    def forward(self, x, theta, g, edge_index):
+    def forward(self, x, theta, g, edge_index, *args):
         neighbours = self.propagate(edge_index, x=x, g=g, theta=theta)
-        # self.reporter.report()
         return neighbours + self.self_kernel(x)
 
     def message(self, x_j, theta, g):
@@ -271,8 +269,9 @@ class MLP(nn.Module):
             x = self.nonlinearity(layer(x))
         return self.mlp[-1](x)
 
+
 class DAGemConv(MessagePassing):
-    def __init__(self, rho_in, rho_out, mlp_dims):
+    def __init__(self, rho_in, rho_out, mlp_dims, *args, **kwargs):
         super(DAGemConv, self).__init__(aggr='add',  flow='target_to_source',)  # "Add" aggregation.
         self.neighbour_kernel = NeighbourKernel(rho_in, rho_out)
         self.transporter = Transporter(rho_in)
@@ -280,11 +279,13 @@ class DAGemConv(MessagePassing):
         mlp_dims = [1] + mlp_dims + [1]
         self.distance_weight = MLP(mlp_dims)
 
-
-    def forward(self, x, theta, g, edge_index, dist):
+    def forward(self, x, theta, g, edge_index, dist, *args):
         neighbours = self.propagate(edge_index, x=x, g=g, theta=theta, dist=dist)
         return neighbours + self.self_kernel(x)
 
     def message(self, x_j, theta, g, dist):
         x = self.transporter(x_j, g)
         return self.neighbour_kernel(x, theta) * self.distance_weight(dist.unsqueeze(-1))
+
+
+
