@@ -5,6 +5,7 @@ import yaml
 from pytorch_lightning import Trainer
 from pytorch_lightning.logging.neptune import NeptuneLogger
 from gem_cnn.registry import loss_registry, nonlinearity_registry
+from gem_cnn.utils import seed_everything
 
 @click.command()
 @click.option('--config')
@@ -34,6 +35,8 @@ def main(config):
     model_args.loss = loss_registry.get(model_args.loss)
     model_args.head_nonlinearity = nonlinearity_registry.get(model_args.head_nonlinearity)
     model_args.gem_nonlinearity = nonlinearity_registry.get(model_args.gem_nonlinearity)
+
+    seed_everything()
 
     model = MeshNetwork(hparams=model_args)
     trainer_args.logger = neptune_logger

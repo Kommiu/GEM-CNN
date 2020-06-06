@@ -10,7 +10,7 @@ import gem_cnn.utils
 from gem_cnn.datasets import STLDataset
 from gem_cnn.models.heads import MLPHead, ConvHead
 from gem_cnn.models.stems import GEMNet
-from gem_cnn.utils import ModuleType
+from gem_cnn.utils import ModuleType, seed_everything
 from gem_cnn.torch_geometric_path.dataloader import DataLoader
 from gem_cnn.transforms import GetLocalPatch, Scale, GEMTransform
 
