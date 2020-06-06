@@ -58,23 +58,40 @@ class MeshNetwork(LightningModule):
         return {'loss': loss, 'log': logs}
 
     def validation_step(self, data, data_nb):
-        y_hat = self(data).squeeze()
-        mse = self.loss(y_hat, data.y.squeeze())
-        return {'val_loss': mse,}
+        with torch.no_grad():
+            y_hat = self(data).squeeze().detach()
+        y = data.y.squeeze()
+        mse = self.loss(y_hat, y).item()
+
+        smape = torch.abs(y_hat - y) / torch.max(y_hat, y)
+        smape = smape[~torch.isnan(smape)].sum().item()
+        count = len(y)
+        return {'val_loss': mse * count, 'count': count, 'smape': smape}
 
     def validation_epoch_end(self, outputs):
-        avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
-        logs = {'val_loss': avg_loss, }
+        counts = sum([x['count'] for x in outputs])
+        avg_loss = sum([x['val_loss'] for x in outputs]) / counts
+        smape = sum([x['smape'] for x in outputs]) / counts
+        logs = {'val_loss': avg_loss, 'smape': smape}
         return {'val_loss': avg_loss, 'log': logs}
 
     def test_step(self, data, data_nb):
-        y_hat = self(data).squeeze()
-        return {'test_loss': self.loss(y_hat, data.y.squeeze())}
+        with torch.no_grad():
+            y_hat = self(data).squeeze().detach()
+        y = data.y.squeeze()
+        mse = self.loss(y_hat, y).item()
+
+        smape = torch.abs(y_hat - y) / torch.max(y_hat, y)
+        smape = smape[~torch.isnan(smape)].sum().item()
+        count = len(y)
+        return {'test_loss': mse * count, 'count': count, 'smape': smape}
 
     def test_epoch_end(self, outputs):
-        avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
-        logs = {'val_loss': avg_loss}
-        return {'val_loss': avg_loss, 'log': logs}
+        counts = sum([x['count'] for x in outputs])
+        avg_loss = sum([x['test_loss'] for x in outputs]) / counts
+        smape = sum([x['smape'] for x in outputs]) / counts
+        logs = {'test_loss': avg_loss, 'smape': smape}
+        return {'test_loss': avg_loss, 'log': logs}
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
@@ -133,8 +150,18 @@ class MeshNetwork(LightningModule):
         )
 
     def test_dataloader(self):
-        return self.val_dataloader()
-    #
+        ds = STLDataset(
+            self.hparams.test_data_root,
+            transform=self.transform,
+            pre_transform=GEMTransform(gem_cnn.utils.weighted_normals, self.hparams.is_da),
+            feature_cols=self.hparams.feature_cols,
+            target_cols=self.hparams.target_cols,
+        )
+        return DataLoader(
+            ds,
+            batch_size=self.hparams.batch_size,
+            num_workers=self.hparams.num_workers,
+        )
 
     @staticmethod
     def add_model_specific_args(parent_parser):
