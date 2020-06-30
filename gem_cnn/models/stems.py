@@ -52,13 +52,12 @@ class GEMNet(nn.Module):
         edge_index = data.edge_index
         theta = data.theta
         g = data.g
-        x = nn.Parameter(x)
         # dist is None if there is no distance in data
         dist = data['distance']
-        x = checkpoint(self.gem_convs[0], x, theta, g, edge_index, dist)
-        x = checkpoint(self.nonlinearities[0], x)
+        x = self.gem_convs[0](x, theta, g, edge_index, dist)
+        x = self.nonlinearities[0](x)
         for i in range(1, len(self.gem_convs) - 1):
             x = x + checkpoint(self.gem_convs[i], x, theta, g, edge_index, dist)
-            x = checkpoint(self.nonlinearities[i], x)
+            x = self.nonlinearities[i](x)
         x = self.nonlinearity(checkpoint(self.gem_convs[-1], x, theta, g, edge_index, dist))
         return x
